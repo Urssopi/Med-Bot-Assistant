@@ -1,0 +1,90 @@
+import tkinter as tk
+from openai import OpenAI
+import threading
+
+client = OpenAI(api_key="...use own api...")
+
+
+def get_ai_response(prompt, response_text):
+    try:
+        # Open dataset file
+        with open("dataset.json", "rb") as open_file:
+            data_file = client.files.create(file=open_file, purpose='assistants')
+
+        # Create AI assistant
+        ai_assistant = client.beta.assistants.create(
+            name="Vacation Advisor",
+            instructions="You are an assistant that specializes in providing health treatment to "
+                         "patients based on what they say is wrong with them, the data from the data set will "
+                         "be used to compare new patients to old patients and their treatments",
+            model="gpt-3.5-turbo",
+            tools=[{"type": "file_search"}]
+        )
+
+        # Create a thread for the assistant
+        thread = client.beta.threads.create(
+            messages=[
+                {
+                    "role": "user",
+                    "content": prompt,
+                    "attachments": [
+                        {"file_id": data_file.id, "tools": [{"type": "file_search"}]}
+                    ]
+                }
+            ]
+        )
+
+        run = client.beta.threads.runs.create_and_poll(
+            thread_id=thread.id,
+            assistant_id=ai_assistant.id
+        )
+
+        if run.status == 'completed':
+            messages = client.beta.threads.messages.list(thread_id=thread.id)
+            user_message = messages.data[1].content[0].text.value
+            assistant_message = messages.data[0].content[0].text.value
+            response = f"User: {user_message}\nAssistant: {assistant_message}"
+        else:
+            response = f"Error: {run.status}"
+    except Exception as e:
+        response = f"An error occurred: {str(e)}"
+
+
+    response_text.delete(1.0, tk.END)
+    response_text.insert(tk.END, response)
+
+
+# Function to handle the button click
+def on_submit():
+    prompt = prompt_entry.get()
+    if prompt:
+        response_text.delete(1.0, tk.END)
+        response_text.insert(tk.END, "Processing...")
+        # Use a thread to avoid blocking the GUI
+        threading.Thread(target=get_ai_response, args=(prompt, response_text)).start()
+    else:
+        response_text.delete(1.0, tk.END)
+        response_text.insert(tk.END, "Please enter a prompt.")
+
+
+# Initialize Tkinter window
+root = tk.Tk()
+root.title("MedBot Assistant")
+root.configure(bg='red')
+# Create and place widgets
+prompt_label = tk.Label(root, text="Med-bot Assistant®\n Explain your situation:")
+prompt_label.pack()
+prompt_label.configure(bg='red', font=("Eccentric Std", 12))
+#
+prompt_entry = tk.Entry(root, width=90)
+prompt_entry.pack()
+prompt_entry.configure(bg='#e02f2f')
+#
+submit_button = tk.Button(root, text="Submit", command=on_submit)
+submit_button.pack()
+submit_button.configure(bg="red",fg='black')
+#
+response_text = tk.Text(root, height=15, width=70)
+response_text.pack()
+response_text.configure(bg='#e02f2f',fg='black')
+root.mainloop()
