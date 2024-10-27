@@ -21,7 +21,6 @@ def get_ai_response(prompt, response_text):
             tools=[{"type": "file_search"}]
         )
 
-        # Create a thread for the assistant
         thread = client.beta.threads.create(
             messages=[
                 {
